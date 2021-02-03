@@ -4,7 +4,7 @@ version: 1.0
 # define all your environments below
 # stacks are deployed into environments based on deploy-env variable specified under DEPLOY section
 deploy_environments:
-    - {name: prod, account_id: 269600787042 }
+    - {name: prod, account_id: 637119802057 }
 
 # stacks listed under DEPLOY will be deployed by phData Cloud Foundation tool
 # list the stacks as a list
