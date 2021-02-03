@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     cfci_version: "1.0.0"
-    project: "project"
+    project: "fcc"
     deployment_decriptor: "deployment.yaml"
     quickstart: "true"
     repo_type: "github"
