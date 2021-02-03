@@ -1,0 +1,3 @@
+Created by phData Inc https://www.phdata.io. phData's intention is
+that every source file, script, document, etc which is tracked and
+primarily located in this git repository is ASLv2 licensed.

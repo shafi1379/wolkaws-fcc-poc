@@ -1,0 +1,319 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: BU Bucket Template
+Parameters:
+  EnvironmentName:
+    Description: Specifies dev or prod environment
+    Type: String
+    Default: "prod"
+    AllowedValues:
+      - "dev"
+      - "prod"
+  CreateIAM:
+    Description: Enable creation of IAM objects
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+  CreateKMS:
+    Description: Enable creation of a CMK with AWS-managed material.  Disable if you need a key with external material.
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+  BUName:
+    Description: Name of the business unit for which to create the bucket.
+    Type: String
+  SFUserArn:
+    Description: User ARN of the Snowflake account IAM User.
+    Type: String
+  BucketKeyArn:
+    Description: The ARN of the key that will be used to encrypt data in this bucket, if it's created externally.
+    Type: String
+    Default: ""
+  SFRWExternalId:
+    Description: The ExternalID for the read-write integration.  Required if CreateIAM is true.
+    Type: String
+    Default: ""
+  SFROExternalId:
+    Description: The ExternalID for the read-only integration.  Required if CreateIAM is true.
+    Type: String
+    Default: ""
+
+Conditions:
+  CreateIAMCondition:
+    Fn::Equals:
+      - Ref: CreateIAM
+      - "true"
+
+  CreateKMSCondition:
+    Fn::Equals:
+      - Ref: CreateKMS
+      - "true"
+
+Resources:
+  BUBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - BUBucketTopicPolicy
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                Fn::If:
+                  - "CreateKMSCondition"
+                  - Fn::GetAtt:
+                    - BUBucketKey
+                    - Arn
+                  - Ref: BucketKeyArn
+      BucketName:
+        Fn::Sub: fcc-${EnvironmentName}-${BUName}-${AWS::Region}
+      NotificationConfiguration:
+        TopicConfigurations:
+          - Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: data
+            Topic:
+              Ref: BUBucketTopic
+  
+  BUBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: BUBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnsureNoEncType
+            Action: s3:PutObject
+            Effect: Deny
+            Principal: "*"
+            Resource:
+              Fn::Sub: arn:aws:s3:::${BUBucket}/*
+            Condition:
+              "Null":
+                "s3:x-amz-server-side-encryption": "false"
+              "StringNotEquals":
+                "s3:x-amz-server-side-encryption": "aws:kms"
+          - Sid: EnsureNoEncKey
+            Action: s3:PutObject
+            Effect: Deny
+            Principal: "*"
+            Resource:
+              Fn::Sub: arn:aws:s3:::${BUBucket}/*
+            Condition:
+              "Null":
+                "s3:x-amz-server-side-encryption-aws-kms-key-id": "false"
+              "StringNotEquals":
+                "s3:x-amz-server-side-encryption-aws-kms-key-id":
+                  Fn::If:
+                    - "CreateKMSCondition"
+                    - Fn::GetAtt:
+                      - BUBucketKey
+                      - Arn
+                    - Ref: BucketKeyArn
+          - Sid: BucketListAccess
+            Action:
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Effect: Allow
+            Principal:
+              AWS:
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-ro-role
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-rw-role
+            Resource:
+              Fn::Sub: arn:aws:s3:::${BUBucket}
+          - Sid: BucketReadAccess
+            Action:
+              - s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS:
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-ro-role
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-rw-role
+            Resource:
+              Fn::Sub: arn:aws:s3:::${BUBucket}/*
+          - Sid: BucketWriteAccess
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Effect: Allow
+            Principal:
+              AWS:
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-rw-role
+            Resource:
+              Fn::Sub: arn:aws:s3:::${BUBucket}/*
+  
+  BUBucketKey:
+    Type: AWS::KMS::Key
+    Condition: "CreateKMSCondition"
+    UpdateReplacePolicy: Retain
+    DependsOn:
+      - RORole
+      - RWRole
+    Properties:
+      Description:
+        Fn::Sub: "BU Bucket Key for ${BUName}"
+      Enabled: True
+      EnableKeyRotation: True
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: bubucket-keypolicy
+        Statement: !If
+          - CreateIAMCondition
+          -
+            - Sid: Allow IAM permissions to work
+              Effect: Allow
+              Principal:
+                AWS:
+                  - Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+              Action: kms:*
+              Resource: '*'
+            - Sid: Allow read-write use of the key
+              Effect: Allow
+              Principal:
+                AWS:
+                  - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-rw-role"
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:DescribeKey
+              Resource: '*'
+            - Sid: Allow read-only use of the key
+              Effect: Allow
+              Principal:
+                AWS:
+                  - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/snf-all-${BUName}-ro-role"
+              Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Resource: '*'
+          -
+            - Sid: Allow IAM permissions to work
+              Effect: Allow
+              Principal:
+                AWS:
+                  - Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+              Action: kms:*
+              Resource: '*'   
+
+      KeyUsage: ENCRYPT_DECRYPT
+      Tags:
+        - Key: BUName
+          Value:
+            Ref: BUName
+  
+  BUBucketKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: "CreateKMSCondition"
+    Properties: 
+      AliasName:
+        Fn::Sub: alias/${EnvironmentName}-${BUName}-key
+      TargetKeyId:
+        Fn::GetAtt:
+          - BUBucketKey
+          - Arn
+  
+  BUBucketTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName:
+        Fn::Sub: ${EnvironmentName}-${BUName}-s3-notification
+      TopicName:
+        Fn::Sub: ${EnvironmentName}-${BUName}-s3-notification
+  
+  BUBucketTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - Ref: BUBucketTopic
+      PolicyDocument:
+        Id: BUTopicPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow-S3-Publish"
+            Effect: Allow
+            Action: sns:Publish
+            Principal:
+              AWS: "*"
+            Resource:
+              Ref: BUBucketTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn":
+                  Fn::Sub: "arn:aws:s3:::fcc-${EnvironmentName}-${BUName}-${AWS::Region}"
+          - Sid: "Allow-Snowflake-Subscribe"
+            Effect: Allow
+            Action: sns:Subscribe
+            Principal:
+              AWS:
+                Ref: SFUserArn
+            Resource:
+              Ref: BUBucketTopic
+  RORole:
+    Condition: "CreateIAMCondition"
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: snf-all-${BUName}-ro-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Snowflake
+            Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              AWS:
+                Ref: SFUserArn
+            Condition:
+              StringEquals:
+                "sts:ExternalId":
+                  Ref: SFROExternalId
+  RWRole:
+    Condition: "CreateIAMCondition"
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: snf-all-${BUName}-rw-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Snowflake
+            Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              AWS:
+                Ref: SFUserArn
+            Condition:
+              StringEquals:
+                "sts:ExternalId":
+                  Ref: SFRWExternalId
+Outputs:
+  SNSTopicARN:
+    Value:
+      Ref: BUBucketTopic
+  BUBucketKeyArn:
+    Value:
+      Fn::If:
+        - "CreateKMSCondition"
+        - Fn::GetAtt:
+          - BUBucketKey
+          - Arn
+        - Ref: BucketKeyArn
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-BucketKeyArn"
