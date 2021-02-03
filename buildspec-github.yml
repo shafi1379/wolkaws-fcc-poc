@@ -7,7 +7,7 @@ env:
     deployment_decriptor: "deployment.yaml"
     quickstart: "true"
     repo_type: "github"
-    owner_repo: "openfcci/wolkaws-fcc"  # provide the path of project in owner/repository-name format
+    owner_repo: "shafi1379/wolkaws-fcc-poc"  # provide the path of project in owner/repository-name format
   parameter-store:
     access_token: /svc/github/access_token
     # artifactory_usr: /CodeBuild/cfgoldbuild/artifactory_usr
