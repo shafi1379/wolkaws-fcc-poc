@@ -4,13 +4,13 @@ version: 1.0
 # define all your environments below
 # stacks are deployed into environments based on deploy-env variable specified under DEPLOY section
 deploy_environments:
-    - {name: prod, account_id: 637119802057 }
+    - { name: prod, account_id: 637119802057 }
 
 # stacks listed under DEPLOY will be deployed by phData Cloud Foundation tool
 # list the stacks as a list
 deploy:
     - { name: external-stage.yaml, phdata_gold_template: false, deploy_env: [prod] }
-
+    - { name: lab/external-sparammal-stage.yaml, phdata_gold_template: false, deploy_env: [prod] }
 # stacks listed under UNDEPLOY will be deleted by phData Cloud Foundation tool
 # if the stack already exists.
 # list the stacks as a list.
