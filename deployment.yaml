@@ -10,11 +10,11 @@ deploy_environments:
 # list the stacks as a list
 deploy:
     - { name: external-stage.yaml, phdata_gold_template: false, deploy_env: [prod] }
+    - { name: lab/external-sparammal-stage.yaml, phdata_gold_template: false, deploy_env: [ prod ] }
 # stacks listed under UNDEPLOY will be deleted by phData Cloud Foundation tool
 # if the stack already exists.
 # list the stacks as a list.
 undeploy:
-    - { name: lab/external-sparammal-stage.yaml, phdata_gold_template: false, deploy_env: [ prod ] }
 
 # stacks listed under IGNORE are deployed by some other means,
 # these will be ignored by phData Cloud Foundation tool

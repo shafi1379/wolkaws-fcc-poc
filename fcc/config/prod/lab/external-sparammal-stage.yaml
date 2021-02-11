@@ -16,8 +16,8 @@ parameters:
   CreateIAM: "true"
   CreateKMS: "true"
   BUName: "sparammal"
-  SFUserArn: "arn:aws:iam::730570900080:user/pjzh-s-ssca3018"
+  SFUserArn: "arn:aws:iam::725198869925:user/cjjc-s-p2st4439"
   #BucketKeyArn: "<CUSTOM KEY ARN>"
-  SFRWExternalId: "SNOWDATA_SFCRole=2_1IpqqSUfbS1JDDwSQkRrtSy9ytc="
-  SFROExternalId: "SNOWDATA_SFCRole=2_PTsEXU6Nmm4qGTffgNBfwko89mA="
+  SFRWExternalId: "CRA74957_SFCRole=2_DX3K+4ZxDqbqiaYpvF0yuXHX3K8="
+  SFROExternalId: "CRA74957_SFCRole=2_ttGjw69LVEhg5HeYevNUECkViR4="
 
